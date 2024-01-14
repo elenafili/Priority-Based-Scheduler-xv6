@@ -444,34 +444,100 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// void
+// scheduler(void)
+// {
+//   struct proc *p;
+//   struct cpu *c = mycpu();
+  
+//   c->proc = 0;
+//   for(;;){
+//     // Avoid deadlock by ensuring that devices can interrupt.
+//     intr_on();
+
+//     for(p = proc; p < &proc[NPROC]; p++) {
+//       acquire(&p->lock);
+//       if(p->state == RUNNABLE) {
+//         // Switch to chosen process.  It is the process's job
+//         // to release its lock and then reacquire it
+//         // before jumping back to us.
+//         p->state = RUNNING;
+//         c->proc = p;
+//         swtch(&c->context, &p->context);
+
+//         // Process is done running for now.
+//         // It should have changed its p->state before coming back.
+//         c->proc = 0;
+//       }
+//       release(&p->lock);
+//     }
+//   }
+// }
+
 void
 scheduler(void)
 {
-  struct proc *p;
-  struct cpu *c = mycpu();
-  
-  c->proc = 0;
-  for(;;){
-    // Avoid deadlock by ensuring that devices can interrupt.
-    intr_on();
+    struct proc *p;
+    struct cpu *c = mycpu();
+    
+    c->proc = 0;
+    for(;;){
+        // Avoid deadlock by ensuring that devices can interrupt.
+        intr_on();
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        struct proc* pp = 0;
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-      }
-      release(&p->lock);
+        for(p = proc; p < &proc[NPROC]; p++) {
+            acquire(&p->lock);
+
+            if(p->state != RUNNABLE) {
+                release(&p->lock);
+                continue;    
+            }
+
+            if (p->priority < pp->priority) {
+                if (pp != 0)
+                    release(&pp->lock);
+
+                pp = p;
+                continue;
+            }
+
+            release(&p->lock);
+        }
+
+        if (pp == 0) 
+            continue;
+        
+        uint64 min = pp->priority;
+        release(&pp->lock);
+
+        for(p = proc; p < &proc[NPROC]; p++) {
+            acquire(&p->lock);
+
+            if(p->state == RUNNABLE) {
+                if (p->priority < min) 
+                    min = p->priority;
+                
+                if (p->priority != min) {
+                    release(&p->lock);
+                    continue;
+                }
+
+                // Switch to chosen process.  It is the process's job
+                // to release its lock and then reacquire it
+                // before jumping back to us.
+                p->state = RUNNING;
+                c->proc = p;
+                swtch(&c->context, &p->context);
+
+                // Process is done running for now.
+                // It should have changed its p->state before coming back.
+                c->proc = 0;
+            }
+            release(&p->lock);
+        }
     }
-  }
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -707,12 +773,12 @@ int
 getpinfo(struct pstat* pstat)
 {
   static char* states[] = {
-  [UNUSED]    "  unused",
-  [USED]      "    used",
+  [UNUSED]    "unused  ",
+  [USED]      "used    ",
   [SLEEPING]  "sleeping",
   [RUNNABLE]  "runnable",
-  [RUNNING]   " running",
-  [ZOMBIE]    " zombie"
+  [RUNNING]   "running ",
+  [ZOMBIE]    "zombie  "
   };
 
   struct pstat kernel_pstat;
