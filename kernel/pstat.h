@@ -7,7 +7,7 @@
 struct pstat {
   int processes;                // Number of processes
   int pid[NPROC];               // Process ID
-  int ppid[NPROC];              // Parent process
+  int ppid[NPROC];              // Parent process ID
   int priority[NPROC];          // Process priority
   char state[NPROC][9];         // Process state
   char name[NPROC][16];         // Process name (debugging)
